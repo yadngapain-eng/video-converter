@@ -1,6 +1,7 @@
 /* ============================================
    CONVERT VIDEO TO 9:16
-   Filter: video di tengah + background blur
+   Video di TENGAH (horizontal + vertical)
+   Background blur dari video
    ============================================ */
 
 const fs = require('fs');
@@ -15,14 +16,13 @@ function ensureDir(dir) {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('CONVERT TO 9:16');
+  console.log('CONVERT TO 9:16 - CENTER MODE');
   console.log('='.repeat(60));
 
   const config = {
     blurStrength: parseFloat(process.env.BLUR_STRENGTH || '30'),
     brightness: parseFloat(process.env.BRIGHTNESS || '0.5'),
-    marginTop: parseFloat(process.env.MARGIN_TOP || '0.12'),
-    marginBottom: parseFloat(process.env.MARGIN_BOTTOM || '0.12'),
+    videoScale: parseFloat(process.env.VIDEO_SCALE || '0.75'),  // 75% dari tinggi canvas
     targetWidth: 1080,
     targetHeight: 1920,
   };
@@ -31,7 +31,7 @@ async function main() {
   console.log('  Target: ' + config.targetWidth + 'x' + config.targetHeight);
   console.log('  Blur: ' + config.blurStrength);
   console.log('  Brightness: ' + config.brightness);
-  console.log('  Margin: ' + config.marginTop + ' / ' + config.marginBottom);
+  console.log('  Video Scale: ' + (config.videoScale * 100) + '% dari tinggi canvas');
 
   const files = fs.readdirSync('input');
   const videoFiles = files.filter(f => /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(f));
@@ -49,35 +49,52 @@ async function main() {
   ensureDir('output');
   const outputFile = path.join('output', baseName + '_shorts.mp4');
 
-  const marginTopPx = Math.floor(config.targetHeight * config.marginTop);
-  const marginBottomPx = Math.floor(config.targetHeight * config.marginBottom);
-  const videoAreaHeight = config.targetHeight - marginTopPx - marginBottomPx;
+  // ============================================
+  // HITUNG TINGGI VIDEO AREA
+  // ============================================
+  // Video scale 0.75 = 75% dari tinggi canvas
+  // Contoh: 1920 * 0.75 = 1440
+  // Sisa 480 (240 atas + 240 bawah) untuk background
+  const videoAreaHeight = Math.floor(config.targetHeight * config.videoScale);
 
-  console.log('Video area: ' + config.targetWidth + 'x' + videoAreaHeight);
-  console.log('Margin top: ' + marginTopPx + 'px');
-  console.log('Margin bottom: ' + marginBottomPx + 'px');
+  console.log('Video area height: ' + videoAreaHeight + 'px');
 
   // ============================================
-  // FILTER — Gunakan KOMA (,) untuk chain
-  // bukan SEMICOLON (;)
+  // FILTER — VIDEO DI TENGAH (horizontal + vertical)
   // ============================================
+  //
+  // Cara kerja overlay:
+  //   overlay=(W-w)/2:(H-h)/2
+  //   W = lebar canvas (1080)
+  //   w = lebar video yang di-overlay
+  //   H = tinggi canvas (1920)
+  //   h = tinggi video yang di-overlay
+  //
+  // Ini auto-center SEMPURNA baik horizontal maupun vertical
+  //
   const filter = [
-    // Split jadi 2 stream: background + foreground
+    // Split jadi 2: background dan foreground
     '[0:v]split=2[bg][fg]',
 
     // Background: scale cover + crop + blur + darken
-    '[bg]scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase,crop=' + config.targetWidth + ':' + config.targetHeight + ',gblur=sigma=' + config.blurStrength + ',eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7[bgblur]',
+    '[bg]scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase,',
+    'crop=' + config.targetWidth + ':' + config.targetHeight + ',',
+    'gblur=sigma=' + config.blurStrength + ',',
+    'eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7[bgblur]',
 
-    // Foreground: scale fit ke video area
+    // Foreground: scale FIT (bukan cover) ke tinggi video area
+    // force_original_aspect_ratio=decrease = video masuk sepenuhnya
     '[fg]scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease[fgscaled]',
 
-    // Overlay foreground di atas background (tengah horizontal, margin top vertikal)
-    '[bgblur][fgscaled]overlay=(W-w)/2:' + marginTopPx + '[out]',
+    // Overlay TEPAT DI TENGAH (horizontal & vertical)
+    '[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[out]',
   ].join(';');
 
   console.log('');
-  console.log('Filter:');
+  console.log('Filter (auto-center):');
   console.log(filter);
+  console.log('');
+  console.log('overlay=(W-w)/2:(H-h)/2  ← ini yang bikin video di tengah SEMPURNA');
   console.log('');
 
   const cmd = [
@@ -96,9 +113,6 @@ async function main() {
     '-y', '"' + outputFile + '"',
   ].join(' ');
 
-  console.log('Command:');
-  console.log(cmd);
-  console.log('');
   console.log('Processing video...');
 
   try {
@@ -117,7 +131,7 @@ async function main() {
   fs.writeFileSync('output/info.txt', outputFile);
 
   console.log('='.repeat(60));
-  console.log('CONVERT COMPLETE');
+  console.log('CONVERT COMPLETE - VIDEO DI TENGAH');
   console.log('='.repeat(60));
 }
 
