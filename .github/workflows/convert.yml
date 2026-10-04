@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       gdrive_link:
-        description: 'Google Drive link (paste full link)'
+        description: 'Google Drive link'
         required: true
         type: string
       release_tag:
@@ -22,18 +22,8 @@ on:
         required: false
         default: '0.5'
         type: string
-      margin_top:
-        description: 'Margin top (0-0.3)'
-        required: false
-        default: '0.12'
-        type: string
-      margin_bottom:
-        description: 'Margin bottom (0-0.3)'
-        required: false
-        default: '0.12'
-        type: string
       video_scale:
-        description: 'Video scale (0.5-0.95) - 0.75 = video 75% dari tinggi canvas'
+        description: 'Video scale (0.5-0.95)'
         required: false
         default: '0.75'
         type: string
@@ -62,33 +52,49 @@ jobs:
           node-version: '20'
 
       # ============================================
-      # CACHE FFMPEG BINARY
+      # CACHE STATIC FFMPEG
+      # Pakai static binary (single file, no deps)
       # ============================================
-      - name: Cache FFmpeg binary
+      - name: Cache static FFmpeg
         id: cache-ffmpeg
         uses: actions/cache@v4
         with:
           path: |
-            /usr/bin/ffmpeg
-            /usr/bin/ffprobe
-          key: ffmpeg-${{ runner.os }}-static-v1
+            ~/.local/bin/ffmpeg
+            ~/.local/bin/ffprobe
+          key: static-ffmpeg-${{ runner.os }}-v6
 
       # ============================================
-      # INSTALL FFMPEG (HANYA KALAU BELUM CACHE)
+      # DOWNLOAD FFMPEG (HANYA KALAU CACHE MISS)
       # ============================================
-      - name: Install FFmpeg (cache miss)
+      - name: Download static FFmpeg
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: |
-          echo 'FFmpeg cache MISS - installing...'
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          ffmpeg -version | head -1
+          echo '⚡ FFmpeg cache MISS - downloading static binary...'
+          mkdir -p ~/.local/bin
+          cd /tmp
+          wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+          tar xf ffmpeg-release-amd64-static.tar.xz
+          mv ffmpeg-*-amd64-static/ffmpeg ~/.local/bin/
+          mv ffmpeg-*-amd64-static/ffprobe ~/.local/bin/
+          chmod +x ~/.local/bin/ffmpeg ~/.local/bin/ffprobe
+          echo '✅ FFmpeg downloaded to ~/.local/bin'
+          ~/.local/bin/ffmpeg -version | head -1
 
-      - name: Verify FFmpeg (cache hit)
+      - name: Use cached FFmpeg
         if: steps.cache-ffmpeg.outputs.cache-hit == 'true'
         run: |
-          echo 'FFmpeg cache HIT!'
-          ffmpeg -version | head -1 || true
+          echo '✅ FFmpeg cache HIT - skip download!'
+          ~/.local/bin/ffmpeg -version | head -1
+
+      # ============================================
+      # ADD FFMPEG TO PATH
+      # ============================================
+      - name: Add FFmpeg to PATH
+        run: |
+          echo '$HOME/.local/bin' >> $GITHUB_PATH
+          which ffmpeg || true
+          ffmpeg -version | head -1
 
       # ============================================
       # CACHE NODE MODULES
@@ -101,19 +107,18 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
 
       # ============================================
-      # INSTALL NODE DEPS
+      # NPM INSTALL (HANYA KALAU CACHE MISS)
       # ============================================
       - name: Install Node dependencies
         if: steps.cache-node.outputs.cache-hit != 'true'
         run: |
-          echo 'Node modules cache MISS - installing...'
+          echo '⚡ Node modules cache MISS - installing...'
           npm install --no-audit --no-fund --no-package-lock
 
-      - name: Verify Node modules (cache hit)
+      - name: Verify Node modules
         if: steps.cache-node.outputs.cache-hit == 'true'
         run: |
-          echo 'Node modules cache HIT!'
-          ls node_modules/ 2>/dev/null | head -5 || echo 'no node_modules'
+          echo '✅ Node modules cache HIT - skip install!'
 
       # ============================================
       # DOWNLOAD VIDEO
@@ -130,8 +135,6 @@ jobs:
         env:
           BLUR_STRENGTH: ${{ inputs.blur_strength }}
           BRIGHTNESS: ${{ inputs.brightness }}
-          MARGIN_TOP: ${{ inputs.margin_top }}
-          MARGIN_BOTTOM: ${{ inputs.margin_bottom }}
           VIDEO_SCALE: ${{ inputs.video_scale }}
         run: node scripts/convert.js
 
@@ -161,6 +164,7 @@ jobs:
 
             Source: ${{ inputs.gdrive_link }}
             Blur: ${{ inputs.blur_strength }}
+            Video Scale: ${{ inputs.video_scale }}
             File Size: ${{ steps.output-info.outputs.file_size }} MB
 
             ### Download
@@ -177,6 +181,8 @@ jobs:
       - name: Summary
         run: |
           echo "## Conversion Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
           echo "**FFmpeg cache:** ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Node cache:** ${{ steps.cache-node.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
