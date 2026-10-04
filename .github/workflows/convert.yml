@@ -18,20 +18,46 @@ on:
         default: 'universal'
         type: choice
         options:
-          - 'universal'
-          - 'whatsapp'
-          - 'facebook'
-          - 'youtube'
-          - 'tiktok'
-          - 'instagram'
+          - universal
+          - whatsapp
+          - facebook
+          - youtube
+          - tiktok
+          - instagram
+      style:
+        description: '🎨 Style Aesthetic'
+        required: true
+        default: 'clean-modern'
+        type: choice
+        options:
+          - clean-modern
+          - soft-dreamy
+          - cinematic-dark
+          - vibrant-vivid
+          - subtle-aesthetic
+          - neon-glow
+          - vintage-film
+          - pure-mirror
+          - dark-elegant
+          - bright-pop
+      strict_size_check:
+        description: '⚠️ Fail kalau melebihi max size?'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+
+concurrency:
+  group: convert-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 jobs:
   convert:
     runs-on: ubuntu-latest
     name: Convert Video
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -40,9 +66,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
-      # Cache FFmpeg static
       - name: Cache static FFmpeg
         id: cache-ffmpeg
         uses: actions/cache@v4
@@ -50,7 +75,7 @@ jobs:
           path: |
             ~/.local/bin/ffmpeg
             ~/.local/bin/ffprobe
-          key: static-ffmpeg-${{ runner.os }}-v6
+          key: static-ffmpeg-${{ runner.os }}-2026-10
 
       - name: Download static FFmpeg
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
@@ -72,7 +97,6 @@ jobs:
       - name: Add FFmpeg to PATH
         run: echo '$HOME/.local/bin' >> $GITHUB_PATH
 
-      # Cache Node modules
       - name: Cache Node modules
         id: cache-node
         uses: actions/cache@v4
@@ -88,53 +112,76 @@ jobs:
         if: steps.cache-node.outputs.cache-hit == 'true'
         run: echo '✅ Node modules cache HIT!'
 
-      # Show platform info
-      - name: Show platform info
+      - name: Show platform & style
         run: |
           echo '════════════════════════════════════════'
           echo '📱 PLATFORM: ${{ inputs.platform }}'
+          echo '🎨 STYLE:    ${{ inputs.style }}'
           echo '════════════════════════════════════════'
-          node -e "const p = require('./scripts/platforms.js'); p.listPlatforms();"
+          node -e "require('./scripts/platforms.js').listPlatforms();"
+          echo ''
+          node -e "require('./scripts/styles.js').listStyles();"
 
-      # Download video
       - name: Download video from Google Drive
         env:
           GDRIVE_LINK: ${{ inputs.gdrive_link }}
         run: node scripts/download.js
 
-      # Convert video dengan auto quality lock
-      - name: Convert video (auto quality lock)
+      - name: Convert video (single-pass + style)
         env:
           PLATFORM: ${{ inputs.platform }}
+          STYLE: ${{ inputs.style }}
         run: node scripts/convert.js
 
-      # Get output info
       - name: Get output info
         id: output-info
         run: |
           OUTPUT_FILE=$(cat output/info.txt)
           PLATFORM_FILE=$(cat output/platform.txt)
+          STYLE_FILE=$(cat output/style.txt 2>/dev/null || echo "clean-modern")
           FILENAME=$(basename "$OUTPUT_FILE")
           SIZE=$(stat -c %s "$OUTPUT_FILE")
-          SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
+          SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $SIZE / 1024 / 1024}")
           echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$SIZE_MB" >> $GITHUB_OUTPUT
           echo "platform=$PLATFORM_FILE" >> $GITHUB_OUTPUT
+          echo "style=$STYLE_FILE" >> $GITHUB_OUTPUT
 
-      # Upload ke Release
+      - name: Validate output size
+        env:
+          SIZE_MB: ${{ steps.output-info.outputs.file_size }}
+          PLATFORM: ${{ inputs.platform }}
+          STRICT: ${{ inputs.strict_size_check }}
+        run: |
+          MAX_MB=$(node -e "console.log(require('./scripts/platforms.js').getPlatform(process.env.PLATFORM).maxSizeMB)")
+          echo "📊 Size: ${SIZE_MB} MB / Max: ${MAX_MB} MB"
+          if awk "BEGIN {exit !($SIZE_MB > $MAX_MB)}"; then
+            echo "⚠️  Size melebihi limit"
+            if [ "$STRICT" = "true" ]; then
+              echo "❌ Strict mode ON — abort"
+              exit 1
+            fi
+            echo "✅ Lanjut upload (strict OFF)"
+          else
+            echo "✅ Size OK"
+          fi
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag }}
-          name: "Video ${{ inputs.platform }} - ${{ inputs.release_tag }}"
+          name: "Video ${{ inputs.platform }} - ${{ inputs.style }} - ${{ inputs.release_tag }}"
           body: |
-            ## 🎬 Video Converted — ${{ inputs.platform }}
+            ## 🎬 Video Converted
 
-            **Platform:** ${{ inputs.platform }}
-            **Source:** ${{ inputs.gdrive_link }}
-            **File Size:** ${{ steps.output-info.outputs.file_size }} MB
+            | Field | Value |
+            |-------|-------|
+            | **Platform** | `${{ inputs.platform }}` |
+            | **Style** | `${{ inputs.style }}` |
+            | **Source** | ${{ inputs.gdrive_link }} |
+            | **File Size** | ${{ steps.output-info.outputs.file_size }} MB |
 
-            ### Download
+            ### 📥 Download
             Klik file di bawah untuk download video.
           files: output/*.mp4
           draft: false
@@ -142,15 +189,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Summary
       - name: Summary
+        if: always()
         run: |
-          echo "## 🎬 Conversion Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Platform:** ${{ inputs.platform }}" >> $GITHUB_STEP_SUMMARY
-          echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Cache Status:**" >> $GITHUB_STEP_SUMMARY
-          echo "- FFmpeg: ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Node: ${{ steps.cache-node.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🎬 Conversion Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Platform | `${{ inputs.platform }}` |"
+            echo "| Style | `${{ inputs.style }}` |"
+            echo "| File | `${{ steps.output-info.outputs.file_name }}` |"
+            echo "| Size | ${{ steps.output-info.outputs.file_size }} MB |"
+            echo "| Cache FFmpeg | ${{ steps.cache-ffmpeg.outputs.cache-hit }} |"
+            echo "| Cache Node | ${{ steps.cache-node.outputs.cache-hit }} |"
+          } >> $GITHUB_STEP_SUMMARY

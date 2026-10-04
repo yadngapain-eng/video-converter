@@ -1,151 +1,20 @@
-/* ============================================
-   STYLE PRESETS
-   Setiap style = kombinasi parameter aesthetic
-   ============================================ */
-
 const STYLES = {
-  // 1. Clean & Modern (default)
-  'clean-modern': {
-    name: 'Clean & Modern',
-    icon: '✨',
-    blur: 15,
-    brightness: 0.7,
-    saturation: 0.85,
-    videoScale: 0.75,
-    vflip: true,
-    description: 'Terang, tajam, modern',
-  },
-
-  // 2. Soft Dreamy
-  'soft-dreamy': {
-    name: 'Soft Dreamy',
-    icon: '🌸',
-    blur: 30,
-    brightness: 0.75,
-    saturation: 0.9,
-    videoScale: 0.72,
-    vflip: true,
-    description: 'Lembut, dreamy, glow',
-  },
-
-  // 3. Cinematic Dark
-  'cinematic-dark': {
-    name: 'Cinematic Dark',
-    icon: '🎬',
-    blur: 25,
-    brightness: 0.4,
-    saturation: 0.6,
-    videoScale: 0.7,
-    vflip: true,
-    description: 'Gelap, elegan, cinematic',
-  },
-
-  // 4. Vibrant Vivid
-  'vibrant-vivid': {
-    name: 'Vibrant Vivid',
-    icon: '🌈',
-    blur: 10,
-    brightness: 0.85,
-    saturation: 1.1,
-    videoScale: 0.8,
-    vflip: true,
-    description: 'Warna cerah, vivid, punchy',
-  },
-
-  // 5. Subtle Aesthetic
-  'subtle-aesthetic': {
-    name: 'Subtle Aesthetic',
-    icon: '🎨',
-    blur: 12,
-    brightness: 0.65,
-    saturation: 0.75,
-    videoScale: 0.75,
-    vflip: true,
-    description: 'Aesthetic, subtle, kalem',
-  },
-
-  // 6. Neon Glow
-  'neon-glow': {
-    name: 'Neon Glow',
-    icon: '⚡',
-    blur: 20,
-    brightness: 0.6,
-    saturation: 1.3,
-    videoScale: 0.75,
-    vflip: true,
-    description: 'Warna neon, glow, gaming',
-  },
-
-  // 7. Vintage Film
-  'vintage-film': {
-    name: 'Vintage Film',
-    icon: '📽️',
-    blur: 22,
-    brightness: 0.55,
-    saturation: 0.7,
-    videoScale: 0.72,
-    vflip: true,
-    description: 'Vintage, film look, retro',
-  },
-
-  // 8. Pure Mirror
-  'pure-mirror': {
-    name: 'Pure Mirror',
-    icon: '🪞',
-    blur: 8,
-    brightness: 0.7,
-    saturation: 0.9,
-    videoScale: 0.78,
-    vflip: true,
-    description: 'Mirror tajam, hampir tanpa blur',
-  },
-
-  // 9. Dark Elegant
-  'dark-elegant': {
-    name: 'Dark Elegant',
-    icon: '🖤',
-    blur: 18,
-    brightness: 0.45,
-    saturation: 0.75,
-    videoScale: 0.73,
-    vflip: true,
-    description: 'Dark, elegant, premium',
-  },
-
-  // 10. Bright Pop
-  'bright-pop': {
-    name: 'Bright Pop',
-    icon: '☀️',
-    blur: 12,
-    brightness: 0.9,
-    saturation: 1.0,
-    videoScale: 0.78,
-    vflip: true,
-    description: 'Sangat terang, pop, ceria',
-  },
+  'clean-modern':    { name:'Clean Modern',    icon:'✨',  description:'Terang, tajam, modern', videoScale:0.85, blur:15, brightness:0.70, saturation:1.0, vflip:false },
+  'soft-dreamy':     { name:'Soft Dreamy',     icon:'🌸',  description:'Lembut, dreamy, glow',  videoScale:0.80, blur:30, brightness:0.75, saturation:1.1, vflip:false },
+  'cinematic-dark':  { name:'Cinematic Dark',  icon:'🎬',  description:'Gelap, elegan, cinematic', videoScale:0.85, blur:25, brightness:0.40, saturation:1.0, vflip:false },
+  'vibrant-vivid':   { name:'Vibrant Vivid',   icon:'🌈',  description:'Warna cerah, vivid',    videoScale:0.88, blur:10, brightness:0.85, saturation:1.3, vflip:false },
+  'subtle-aesthetic':{ name:'Subtle Aesthetic',icon:'🎨',  description:'Aesthetic, subtle, kalem', videoScale:0.82, blur:12, brightness:0.65, saturation:1.05, vflip:false },
+  'neon-glow':       { name:'Neon Glow',       icon:'⚡',  description:'Neon, glow, gaming',     videoScale:0.80, blur:20, brightness:0.60, saturation:1.4, vflip:false },
+  'vintage-film':    { name:'Vintage Film',    icon:'📽️', description:'Vintage, film look',     videoScale:0.84, blur:22, brightness:0.55, saturation:0.9, vflip:false },
+  'pure-mirror':     { name:'Pure Mirror',     icon:'🪞',  description:'Mirror tajam',           videoScale:0.90, blur:8,  brightness:0.70, saturation:1.0, vflip:true },
+  'dark-elegant':    { name:'Dark Elegant',    icon:'🖤',  description:'Dark, premium',          videoScale:0.85, blur:18, brightness:0.45, saturation:1.0, vflip:false },
+  'bright-pop':      { name:'Bright Pop',      icon:'☀️', description:'Sangat terang, ceria',   videoScale:0.88, blur:12, brightness:0.90, saturation:1.2, vflip:false },
 };
-
-// ============================================
-// GET STYLE BY NAME
-// ============================================
-function getStyle(name) {
-  if (STYLES[name]) {
-    return STYLES[name];
-  }
-  // Fallback ke clean-modern
-  console.warn('Style "' + name + '" tidak ditemukan, pakai clean-modern');
-  return STYLES['clean-modern'];
-}
-
-// ============================================
-// LIST ALL STYLES
-// ============================================
+function getStyle(name) { return STYLES[name] || STYLES['clean-modern']; }
 function listStyles() {
-  console.log('Available styles:');
-  Object.keys(STYLES).forEach(function(key) {
-    var s = STYLES[key];
-    console.log('  ' + s.icon + ' ' + key + ' — ' + s.name + ' (' + s.description + ')');
-  });
+  console.log('Styles:');
+  for (const [k,v] of Object.entries(STYLES)) {
+    console.log(`  ${v.icon} ${k} - ${v.name} (${v.description})`);
+  }
 }
-
-module.exports = { STYLES, getStyle, listStyles };
+module.exports = { getStyle, listStyles, STYLES };

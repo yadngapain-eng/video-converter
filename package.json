@@ -1,13 +1,15 @@
 {
   "name": "video-converter",
-  "version": "1.0.0",
-  "description": "Convert Google Drive video to YouTube Shorts format 9:16",
+  "version": "2.0.0",
+  "description": "Convert Google Drive video to YouTube Shorts (9:16) with auto quality lock and 10 style presets",
   "scripts": {
     "download": "node scripts/download.js",
-    "convert": "node scripts/convert.js"
+    "convert": "node scripts/convert.js",
+    "list-platforms": "node -e \"require('./scripts/platforms.js').listPlatforms()\"",
+    "list-styles": "node -e \"require('./scripts/styles.js').listStyles()\""
   },
-  "dependencies": {
-    "fs-extra": "^11.2.0"
+  "engines": {
+    "node": ">=20"
   },
   "private": true
 }
