@@ -10,3 +10,5 @@ output/
 Thumbs.db
 .vscode/
 .idea/
+*.log
+package-lock.json

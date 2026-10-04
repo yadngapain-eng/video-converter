@@ -42,25 +42,88 @@ jobs:
     name: Convert Video
 
     steps:
+      # ============================================
+      # CHECKOUT
+      # ============================================
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ============================================
+      # CACHE FFMPEG BINARY
+      # ============================================
+      - name: Cache FFmpeg binary
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/bin/ffmpeg
+            /usr/bin/ffprobe
+            /usr/lib/x86_64-linux-gnu/libav*
+          key: ffmpeg-${{ runner.os }}-static-v1
+
+      # ============================================
+      # INSTALL FFMPEG (HANYA KALAU BELUM CACHE)
+      # ============================================
+      - name: Install FFmpeg (cache miss)
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          echo '⚡ FFmpeg cache MISS - installing...'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Verify FFmpeg (cache hit)
+        if: steps.cache-ffmpeg.outputs.cache-hit == 'true'
+        run: |
+          echo '✅ FFmpeg cache HIT - skip install!'
+          ffmpeg -version | head -1 || true
+
+      # ============================================
+      # SETUP NODE.JS
+      # ============================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version | head -1
+      # ============================================
+      # CACHE NODE MODULES
+      # ============================================
+      - name: Cache Node modules
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
 
+      # ============================================
+      # INSTALL NODE DEPS (HANYA KALAU BELUM CACHE)
+      # ============================================
+      - name: Install Node dependencies
+        if: steps.cache-node.outputs.cache-hit != 'true'
+        run: |
+          echo '⚡ Node modules cache MISS - installing...'
+          npm install --no-audit --no-fund
+
+      - name: Verify Node modules (cache hit)
+        if: steps.cache-node.outputs.cache-hit == 'true'
+        run: |
+          echo '✅ Node modules cache HIT - skip install!'
+          ls -la node_modules/ 2>/dev/null | head -5 || echo 'no modules'
+
+      # ============================================
+      # DOWNLOAD VIDEO
+      # ============================================
       - name: Download video from Google Drive
         env:
           GDRIVE_LINK: ${{ inputs.gdrive_link }}
         run: node scripts/download.js
 
+      # ============================================
+      # CONVERT VIDEO
+      # ============================================
       - name: Convert video to 9:16
         env:
           BLUR_STRENGTH: ${{ inputs.blur_strength }}
@@ -69,6 +132,9 @@ jobs:
           MARGIN_BOTTOM: ${{ inputs.margin_bottom }}
         run: node scripts/convert.js
 
+      # ============================================
+      # GET OUTPUT INFO
+      # ============================================
       - name: Get output info
         id: output-info
         run: |
@@ -79,6 +145,9 @@ jobs:
           echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$SIZE_MB" >> $GITHUB_OUTPUT
 
+      # ============================================
+      # CREATE RELEASE
+      # ============================================
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -90,19 +159,24 @@ jobs:
             Source: ${{ inputs.gdrive_link }}
             Blur: ${{ inputs.blur_strength }}
             Brightness: ${{ inputs.brightness }}
-            Margin: Top ${{ inputs.margin_top }} / Bottom ${{ inputs.margin_bottom }}
             File Size: ${{ steps.output-info.outputs.file_size }} MB
 
             ### Download
-            Klik file di bawah untuk download video hasil konversi.
+            Klik file di bawah untuk download video.
           files: output/*.mp4
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # ============================================
+      # SUMMARY
+      # ============================================
       - name: Summary
         run: |
           echo "## Conversion Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
+          echo "**FFmpeg cache:** ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Node cache:** ${{ steps.cache-node.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
