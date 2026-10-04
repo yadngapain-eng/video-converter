@@ -1,12 +1,18 @@
 /* ============================================
-   CONVERT VIDEO TO 9:16 - STYLE PRESET
-   Pilih style → semua parameter auto-set
+   CONVERT VIDEO - AUTO QUALITY LOCK
+   Flow:
+   1. Deteksi kualitas video
+   2. Upscale kalau perlu
+   3. Convert ke 9:16 dengan setting platform
+   4. Lock kualitas ke maksimal
    ============================================ */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { getStyle, listStyles } = require('./styles.js');
+const { getPlatform, listPlatforms } = require('./platforms.js');
+const { detectQuality } = require('./detect-quality.js');
+const { upscaleVideo, needsUpscale } = require('./upscale.js');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -16,44 +22,30 @@ function ensureDir(dir) {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('CONVERT TO 9:16 - STYLE PRESET MODE');
+  console.log('🎬 CONVERT VIDEO — AUTO QUALITY LOCK');
   console.log('='.repeat(60));
-
-  // ============================================
-  // BACA STYLE DARI ENV
-  // ============================================
-  const styleName = process.env.STYLE || 'clean-modern';
-  const style = getStyle(styleName);
-
-  console.log('');
-  console.log('🎨 Style dipilih: ' + style.icon + ' ' + style.name);
-  console.log('   ' + style.description);
-  console.log('');
-  console.log('📊 Parameter (auto-set):');
-  console.log('   Blur: ' + style.blur);
-  console.log('   Brightness: ' + style.brightness);
-  console.log('   Saturation: ' + style.saturation);
-  console.log('   Video Scale: ' + (style.videoScale * 100) + '%');
-  console.log('   VFlip (mirror): ' + style.vflip);
   console.log('');
 
   // ============================================
-  // LIST ALL STYLES (untuk referensi)
+  // STEP 1: Baca platform dari env
   // ============================================
-  console.log('📋 Semua style yang tersedia:');
-  listStyles();
+  const platformName = process.env.PLATFORM || 'universal';
+  const platform = getPlatform(platformName);
+
+  console.log('📱 Platform: ' + platform.icon + ' ' + platform.name);
+  console.log('   ' + platform.notes);
+  console.log('');
+  console.log('📊 Target quality:');
+  console.log('   • Resolusi: ' + platform.width + 'x' + platform.height);
+  console.log('   • FPS: ' + platform.fps);
+  console.log('   • Bitrate: ' + platform.videoBitrate);
+  console.log('   • Max size: ' + platform.maxSizeMB + ' MB');
+  console.log('   • Max duration: ' + platform.maxDuration + ' detik');
   console.log('');
 
-  const config = {
-    blurStrength: style.blur,
-    brightness: style.brightness,
-    saturation: style.saturation,
-    videoScale: style.videoScale,
-    vflip: style.vflip,
-    targetWidth: 1080,
-    targetHeight: 1920,
-  };
-
+  // ============================================
+  // STEP 2: Cari video input
+  // ============================================
   const files = fs.readdirSync('input');
   const videoFiles = files.filter(f => /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(f));
 
@@ -67,35 +59,69 @@ async function main() {
 
   console.log('📁 Input: ' + inputFile);
 
+  // ============================================
+  // STEP 3: Deteksi kualitas video
+  // ============================================
+  const quality = detectQuality(inputFile);
+
+  if (quality.error) {
+    console.error('❌ Gagal deteksi kualitas, lanjut dengan default');
+  }
+
+  // ============================================
+  // STEP 4: Cek perlu upscale atau tidak
+  // ============================================
+  const issues = needsUpscale(quality, platform);
+
+  if (issues.length > 0) {
+    console.log('⚠️  Video di bawah standar ' + platform.name);
+    console.log('   Perlu upscale: ' + issues.join(', '));
+    console.log('');
+
+    // ============================================
+    // STEP 4a: Upscale video
+    // ============================================
+    ensureDir('temp');
+    const upscaledFile = path.join('temp', 'upscaled.mp4');
+
+    await upscaleVideo(inputFile, upscaledFile, quality, platform);
+
+    // Pakai file yang sudah di-upscale
+    var workingFile = upscaledFile;
+  } else {
+    console.log('✅ Kualitas video sudah OK untuk ' + platform.name);
+    var workingFile = inputFile;
+  }
+
+  console.log('');
+
+  // ============================================
+  // STEP 5: Convert ke 9:16 dengan aesthetic
+  // ============================================
+  console.log('='.repeat(60));
+  console.log('🎨 CONVERT KE 9:16 (AESTHETIC)');
+  console.log('='.repeat(60));
+  console.log('');
+
   ensureDir('output');
   const outputFile = path.join('output', baseName + '_shorts.mp4');
 
-  const videoAreaHeight = Math.floor(config.targetHeight * config.videoScale);
+  // Deteksi kualitas video working
+  const workingQuality = detectQuality(workingFile);
 
-  // ============================================
-  // BUILD FILTER
-  // ============================================
-  // Perhatikan aturan koma: koma HANYA di antara filter
-  //
+  const videoAreaHeight = Math.floor(platform.height * platform.videoScale);
+
+  // Build filter aesthetic
   var bgFilters = [
-    'scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase',
-    'crop=' + config.targetWidth + ':' + config.targetHeight,
+    'scale=' + platform.width + ':' + platform.height + ':force_original_aspect_ratio=increase',
+    'crop=' + platform.width + ':' + platform.height,
+    'vflip',
+    'gblur=sigma=' + platform.blur,
+    'eq=brightness=' + (platform.brightness - 1).toFixed(2) + ':saturation=' + platform.saturation,
   ];
 
-  // VFlip kalau style support
-  if (config.vflip) {
-    bgFilters.push('vflip');
-  }
-
-  bgFilters.push('gblur=sigma=' + config.blurStrength);
-  bgFilters.push('eq=brightness=' + (config.brightness - 1).toFixed(2) + ':saturation=' + config.saturation);
-
   const bgChain = '[bg]' + bgFilters.join(',') + '[bgblur]';
-
-  const fgChain = '[fg]' +
-    'scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease' +
-    '[fgscaled]';
-
+  const fgChain = '[fg]scale=' + platform.width + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease[fgscaled]';
   const overlay = '[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[out]';
 
   const filter = [
@@ -105,47 +131,107 @@ async function main() {
     overlay,
   ].join(';');
 
+  console.log('📐 Target: ' + platform.width + 'x' + platform.height);
+  console.log('🎬 FPS: ' + platform.fps);
+  console.log('📊 Bitrate: ' + platform.videoBitrate);
+  console.log('🎨 Preset: ' + platform.preset);
+  console.log('🎯 CRF: ' + platform.crf);
   console.log('');
   console.log('🔧 Filter:');
   console.log(filter);
   console.log('');
 
+  // ============================================
+  // BUILD FFMPEG COMMAND
+  // ============================================
   const cmd = [
     'ffmpeg',
-    '-i', '"' + inputFile + '"',
+    '-i', '"' + workingFile + '"',
     '-filter_complex', '"' + filter + '"',
     '-map', '"[out]"',
     '-map', '0:a?',
     '-c:v', 'libx264',
-    '-preset', 'fast',
-    '-crf', '23',
+    '-preset', platform.preset,
+    '-crf', platform.crf.toString(),
+    '-b:v', platform.videoBitrate,
+    '-maxrate', platform.videoBitrate,
+    '-bufsize', '20M',
+    '-profile:v', 'high',
+    '-level', '4.2',
     '-pix_fmt', 'yuv420p',
+    '-r', platform.fps.toString(),
     '-c:a', 'aac',
-    '-b:a', '128k',
+    '-b:a', platform.audioBitrate,
+    '-ar', '48000',
     '-movflags', '+faststart',
     '-y', '"' + outputFile + '"',
   ].join(' ');
 
-  console.log('Processing video...');
+  console.log('⏳ Processing video...');
+  console.log('');
 
   try {
     execSync(cmd, { stdio: 'inherit' });
     console.log('');
-    console.log('Convert selesai!');
+    console.log('✅ Convert selesai!');
   } catch (err) {
-    console.error('Convert gagal:', err.message);
+    console.error('❌ Convert gagal:', err.message);
     process.exit(1);
   }
 
-  const stats = fs.statSync(outputFile);
-  console.log('📁 Output: ' + outputFile);
-  console.log('📊 Size: ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB');
-
-  fs.writeFileSync('output/info.txt', outputFile);
-  fs.writeFileSync('output/style.txt', styleName);
-
+  // ============================================
+  // STEP 6: Verifikasi hasil
+  // ============================================
+  console.log('');
   console.log('='.repeat(60));
-  console.log('CONVERT COMPLETE - ' + style.icon + ' ' + style.name);
+  console.log('📊 VERIFIKASI HASIL');
+  console.log('='.repeat(60));
+  console.log('');
+
+  const finalQuality = detectQuality(outputFile);
+  const stats = fs.statSync(outputFile);
+  const finalSizeMB = (stats.size / 1024 / 1024).toFixed(2);
+
+  console.log('✅ Kualitas final:');
+  console.log('   📐 Resolusi: ' + finalQuality.resolution);
+  console.log('   📊 Bitrate: ' + finalQuality.bitrateMbps + ' Mbps');
+  console.log('   🎬 FPS: ' + finalQuality.fps);
+  console.log('   📦 Size: ' + finalSizeMB + ' MB');
+  console.log('   ⏱️  Durasi: ' + finalQuality.duration.toFixed(2) + ' detik');
+  console.log('');
+
+  // Cek limit size
+  if (parseFloat(finalSizeMB) > platform.maxSizeMB) {
+    console.log('⚠️  Size melebihi limit ' + platform.name + ' (' + platform.maxSizeMB + ' MB)');
+    console.log('   Rekomendasi: kurangi bitrate atau durasi');
+  } else {
+    console.log('✅ Size OK untuk ' + platform.name);
+  }
+
+  // Cek durasi
+  if (finalQuality.duration > platform.maxDuration) {
+    console.log('⚠️  Durasi melebihi limit ' + platform.maxDuration + 's');
+  } else {
+    console.log('✅ Durasi OK');
+  }
+
+  // ============================================
+  // SAVE INFO
+  // ============================================
+  fs.writeFileSync('output/info.txt', outputFile);
+  fs.writeFileSync('output/platform.txt', platformName);
+  fs.writeFileSync('output/quality.json', JSON.stringify({
+    platform: platformName,
+    original: quality,
+    final: finalQuality,
+    fileSizeMB: finalSizeMB,
+    upscaled: issues.length > 0,
+    issues: issues,
+  }, null, 2));
+
+  console.log('');
+  console.log('='.repeat(60));
+  console.log('✅ CONVERT COMPLETE — ' + platform.icon + ' ' + platform.name);
   console.log('='.repeat(60));
 }
 

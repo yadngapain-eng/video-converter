@@ -4,30 +4,26 @@ on:
   workflow_dispatch:
     inputs:
       gdrive_link:
-        description: '📥 Google Drive Link (paste full link)'
+        description: '📥 Google Drive Link'
         required: true
         type: string
       release_tag:
-        description: '🏷️ Release Tag (contoh: v1, v2, v3)'
+        description: '🏷️ Release Tag (contoh: v1)'
         required: true
         default: 'v1'
         type: string
-      style:
-        description: '🎨 Pilih Style (semua parameter auto-set)'
+      platform:
+        description: '📱 Platform Target (auto-lock quality)'
         required: true
-        default: 'clean-modern'
+        default: 'universal'
         type: choice
         options:
-          - 'clean-modern'
-          - 'soft-dreamy'
-          - 'cinematic-dark'
-          - 'vibrant-vivid'
-          - 'subtle-aesthetic'
-          - 'neon-glow'
-          - 'vintage-film'
-          - 'pure-mirror'
-          - 'dark-elegant'
-          - 'bright-pop'
+          - 'universal'
+          - 'whatsapp'
+          - 'facebook'
+          - 'youtube'
+          - 'tiktok'
+          - 'instagram'
 
 permissions:
   contents: write
@@ -38,23 +34,15 @@ jobs:
     name: Convert Video
 
     steps:
-      # ============================================
-      # CHECKOUT
-      # ============================================
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ============================================
-      # SETUP NODE.JS
-      # ============================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # ============================================
-      # CACHE STATIC FFMPEG
-      # ============================================
+      # Cache FFmpeg static
       - name: Cache static FFmpeg
         id: cache-ffmpeg
         uses: actions/cache@v4
@@ -64,13 +52,10 @@ jobs:
             ~/.local/bin/ffprobe
           key: static-ffmpeg-${{ runner.os }}-v6
 
-      # ============================================
-      # DOWNLOAD FFMPEG (HANYA KALAU CACHE MISS)
-      # ============================================
       - name: Download static FFmpeg
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: |
-          echo '⚡ FFmpeg cache MISS - downloading static binary...'
+          echo '⚡ FFmpeg cache MISS - downloading...'
           mkdir -p ~/.local/bin
           cd /tmp
           wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
@@ -78,23 +63,16 @@ jobs:
           mv ffmpeg-*-amd64-static/ffmpeg ~/.local/bin/
           mv ffmpeg-*-amd64-static/ffprobe ~/.local/bin/
           chmod +x ~/.local/bin/ffmpeg ~/.local/bin/ffprobe
-          echo '✅ FFmpeg downloaded to ~/.local/bin'
-          ~/.local/bin/ffmpeg -version | head -1
+          echo '✅ FFmpeg downloaded'
 
       - name: Use cached FFmpeg
         if: steps.cache-ffmpeg.outputs.cache-hit == 'true'
-        run: |
-          echo '✅ FFmpeg cache HIT - skip download!'
-          ~/.local/bin/ffmpeg -version | head -1
+        run: echo '✅ FFmpeg cache HIT!'
 
       - name: Add FFmpeg to PATH
-        run: |
-          echo '$HOME/.local/bin' >> $GITHUB_PATH
-          ffmpeg -version | head -1
+        run: echo '$HOME/.local/bin' >> $GITHUB_PATH
 
-      # ============================================
-      # CACHE NODE MODULES
-      # ============================================
+      # Cache Node modules
       - name: Cache Node modules
         id: cache-node
         uses: actions/cache@v4
@@ -110,60 +88,49 @@ jobs:
         if: steps.cache-node.outputs.cache-hit == 'true'
         run: echo '✅ Node modules cache HIT!'
 
-      # ============================================
-      # SHOW STYLE INFO
-      # ============================================
-      - name: Show selected style
+      # Show platform info
+      - name: Show platform info
         run: |
           echo '════════════════════════════════════════'
-          echo '🎨 STYLE DIPILIH: ${{ inputs.style }}'
+          echo '📱 PLATFORM: ${{ inputs.platform }}'
           echo '════════════════════════════════════════'
-          node -e "const s = require('./scripts/styles.js'); s.listStyles();"
-          echo '════════════════════════════════════════'
+          node -e "const p = require('./scripts/platforms.js'); p.listPlatforms();"
 
-      # ============================================
-      # DOWNLOAD VIDEO
-      # ============================================
+      # Download video
       - name: Download video from Google Drive
         env:
           GDRIVE_LINK: ${{ inputs.gdrive_link }}
         run: node scripts/download.js
 
-      # ============================================
-      # CONVERT VIDEO (PAKAI STYLE)
-      # ============================================
-      - name: Convert video to 9:16
+      # Convert video dengan auto quality lock
+      - name: Convert video (auto quality lock)
         env:
-          STYLE: ${{ inputs.style }}
+          PLATFORM: ${{ inputs.platform }}
         run: node scripts/convert.js
 
-      # ============================================
-      # GET OUTPUT INFO
-      # ============================================
+      # Get output info
       - name: Get output info
         id: output-info
         run: |
           OUTPUT_FILE=$(cat output/info.txt)
-          STYLE_FILE=$(cat output/style.txt)
+          PLATFORM_FILE=$(cat output/platform.txt)
           FILENAME=$(basename "$OUTPUT_FILE")
           SIZE=$(stat -c %s "$OUTPUT_FILE")
           SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
           echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$SIZE_MB" >> $GITHUB_OUTPUT
-          echo "style=$STYLE_FILE" >> $GITHUB_OUTPUT
+          echo "platform=$PLATFORM_FILE" >> $GITHUB_OUTPUT
 
-      # ============================================
-      # CREATE RELEASE
-      # ============================================
+      # Upload ke Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ inputs.release_tag }}
-          name: "Video 9:16 - ${{ inputs.release_tag }}"
+          name: "Video ${{ inputs.platform }} - ${{ inputs.release_tag }}"
           body: |
-            ## 🎬 Video Converted to 9:16
+            ## 🎬 Video Converted — ${{ inputs.platform }}
 
-            **Style:** ${{ inputs.style }}
+            **Platform:** ${{ inputs.platform }}
             **Source:** ${{ inputs.gdrive_link }}
             **File Size:** ${{ steps.output-info.outputs.file_size }} MB
 
@@ -175,15 +142,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ============================================
-      # SUMMARY
-      # ============================================
+      # Summary
       - name: Summary
         run: |
           echo "## 🎬 Conversion Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Style:** ${{ inputs.style }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ inputs.platform }}" >> $GITHUB_STEP_SUMMARY
           echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
-          echo "**FFmpeg cache:** ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Node cache:** ${{ steps.cache-node.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Cache Status:**" >> $GITHUB_STEP_SUMMARY
+          echo "- FFmpeg: ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Node: ${{ steps.cache-node.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
