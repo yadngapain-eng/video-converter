@@ -1,7 +1,6 @@
 /* ============================================
-   CONVERT VIDEO TO 9:16
-   Video di TENGAH (horizontal + vertical)
-   Background blur dari video
+   CONVERT VIDEO TO 9:16 - CENTER MODE
+   Filter: koma HANYA di antara filter, bukan di akhir
    ============================================ */
 
 const fs = require('fs');
@@ -22,7 +21,7 @@ async function main() {
   const config = {
     blurStrength: parseFloat(process.env.BLUR_STRENGTH || '30'),
     brightness: parseFloat(process.env.BRIGHTNESS || '0.5'),
-    videoScale: parseFloat(process.env.VIDEO_SCALE || '0.75'),  // 75% dari tinggi canvas
+    videoScale: parseFloat(process.env.VIDEO_SCALE || '0.75'),
     targetWidth: 1080,
     targetHeight: 1920,
   };
@@ -49,52 +48,44 @@ async function main() {
   ensureDir('output');
   const outputFile = path.join('output', baseName + '_shorts.mp4');
 
-  // ============================================
-  // HITUNG TINGGI VIDEO AREA
-  // ============================================
-  // Video scale 0.75 = 75% dari tinggi canvas
-  // Contoh: 1920 * 0.75 = 1440
-  // Sisa 480 (240 atas + 240 bawah) untuk background
   const videoAreaHeight = Math.floor(config.targetHeight * config.videoScale);
-
   console.log('Video area height: ' + videoAreaHeight + 'px');
 
   // ============================================
-  // FILTER — VIDEO DI TENGAH (horizontal + vertical)
+  // FILTER — Koma HANYA di ANTARA filter
   // ============================================
   //
-  // Cara kerja overlay:
-  //   overlay=(W-w)/2:(H-h)/2
-  //   W = lebar canvas (1080)
-  //   w = lebar video yang di-overlay
-  //   H = tinggi canvas (1920)
-  //   h = tinggi video yang di-overlay
+  // Chain bg (sequential):
+  //   [bg] → scale → crop → blur → eq → [bgblur]
+  //   Ditulis: [bg]scale=...,crop=...,gblur=...,eq=...[bgblur]
   //
-  // Ini auto-center SEMPURNA baik horizontal maupun vertical
+  // Perhatikan: KOMA di ANTARA filter, TIDAK di akhir
   //
+  const bgChain = '[bg]' +
+    'scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase' +
+    ',crop=' + config.targetWidth + ':' + config.targetHeight +
+    ',gblur=sigma=' + config.blurStrength +
+    ',eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7' +
+    '[bgblur]';
+
+  const fgChain = '[fg]' +
+    'scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease' +
+    '[fgscaled]';
+
+  const overlay = '[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[out]';
+
   const filter = [
-    // Split jadi 2: background dan foreground
-    '[0:v]split=2[bg][fg]',
-
-    // Background: scale cover + crop + blur + darken
-    '[bg]scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase,',
-    'crop=' + config.targetWidth + ':' + config.targetHeight + ',',
-    'gblur=sigma=' + config.blurStrength + ',',
-    'eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7[bgblur]',
-
-    // Foreground: scale FIT (bukan cover) ke tinggi video area
-    // force_original_aspect_ratio=decrease = video masuk sepenuhnya
-    '[fg]scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease[fgscaled]',
-
-    // Overlay TEPAT DI TENGAH (horizontal & vertical)
-    '[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[out]',
+    '[0:v]split=2[bg][fg]',   // split pakai SEMICOLON
+    bgChain,                  // chain bg: koma di antara filter
+    fgChain,                  // 1 filter, no comma
+    overlay,                  // overlay 2 input
   ].join(';');
 
   console.log('');
   console.log('Filter (auto-center):');
   console.log(filter);
   console.log('');
-  console.log('overlay=(W-w)/2:(H-h)/2  ← ini yang bikin video di tengah SEMPURNA');
+  console.log('overlay=(W-w)/2:(H-h)/2  ← video di tengah SEMPURNA');
   console.log('');
 
   const cmd = [
