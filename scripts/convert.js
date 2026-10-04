@@ -1,15 +1,12 @@
 /* ============================================
-   CONVERT VIDEO TO 9:16
-   AESTHETIC MIRROR BACKGROUND
-   - Video di tengah (auto-center)
-   - Background = mirror video (flip vertical)
-   - Blur ringan (aesthetic, bukan blur tebal)
-   - Brightness terang (bukan gelap)
+   CONVERT VIDEO TO 9:16 - STYLE PRESET
+   Pilih style → semua parameter auto-set
    ============================================ */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getStyle, listStyles } = require('./styles.js');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -19,24 +16,43 @@ function ensureDir(dir) {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('CONVERT TO 9:16 - AESTHETIC MODE');
+  console.log('CONVERT TO 9:16 - STYLE PRESET MODE');
   console.log('='.repeat(60));
 
+  // ============================================
+  // BACA STYLE DARI ENV
+  // ============================================
+  const styleName = process.env.STYLE || 'clean-modern';
+  const style = getStyle(styleName);
+
+  console.log('');
+  console.log('🎨 Style dipilih: ' + style.icon + ' ' + style.name);
+  console.log('   ' + style.description);
+  console.log('');
+  console.log('📊 Parameter (auto-set):');
+  console.log('   Blur: ' + style.blur);
+  console.log('   Brightness: ' + style.brightness);
+  console.log('   Saturation: ' + style.saturation);
+  console.log('   Video Scale: ' + (style.videoScale * 100) + '%');
+  console.log('   VFlip (mirror): ' + style.vflip);
+  console.log('');
+
+  // ============================================
+  // LIST ALL STYLES (untuk referensi)
+  // ============================================
+  console.log('📋 Semua style yang tersedia:');
+  listStyles();
+  console.log('');
+
   const config = {
-    blurStrength: parseFloat(process.env.BLUR_STRENGTH || '15'),
-    brightness: parseFloat(process.env.BRIGHTNESS || '0.7'),
-    saturation: parseFloat(process.env.SATURATION || '0.85'),
-    videoScale: parseFloat(process.env.VIDEO_SCALE || '0.75'),
+    blurStrength: style.blur,
+    brightness: style.brightness,
+    saturation: style.saturation,
+    videoScale: style.videoScale,
+    vflip: style.vflip,
     targetWidth: 1080,
     targetHeight: 1920,
   };
-
-  console.log('Config:');
-  console.log('  Target: ' + config.targetWidth + 'x' + config.targetHeight);
-  console.log('  Blur: ' + config.blurStrength + ' (ringan)');
-  console.log('  Brightness: ' + config.brightness + ' (terang)');
-  console.log('  Saturation: ' + config.saturation);
-  console.log('  Video Scale: ' + (config.videoScale * 100) + '%');
 
   const files = fs.readdirSync('input');
   const videoFiles = files.filter(f => /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(f));
@@ -49,35 +65,32 @@ async function main() {
   const inputFile = path.join('input', videoFiles[0]);
   const baseName = path.parse(videoFiles[0]).name;
 
-  console.log('Input: ' + inputFile);
+  console.log('📁 Input: ' + inputFile);
 
   ensureDir('output');
   const outputFile = path.join('output', baseName + '_shorts.mp4');
 
   const videoAreaHeight = Math.floor(config.targetHeight * config.videoScale);
-  console.log('Video area height: ' + videoAreaHeight + 'px');
 
   // ============================================
-  // FILTER AESTHETIC
+  // BUILD FILTER
   // ============================================
+  // Perhatikan aturan koma: koma HANYA di antara filter
   //
-  // Cara kerja:
-  // 1. Split video jadi 2 (bg + fg)
-  // 2. Background: scale COVER + blur RINGAN + flip vertical (mirror)
-  // 3. Foreground: scale FIT (video asli)
-  // 4. Overlay fg di tengah, bg di belakang
-  //
-  // Filter FFmpeg rules:
-  // • Koma (,) = chain filter (sequential)
-  // • Semicolon (;) = split chain (parallel)
-  //
-  const bgChain = '[bg]' +
-    'scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase' +
-    ',crop=' + config.targetWidth + ':' + config.targetHeight +
-    ',vflip' +                                              // mirror vertical (opsional)
-    ',gblur=sigma=' + config.blurStrength +                 // blur RINGAN
-    ',eq=brightness=' + (config.brightness - 1).toFixed(2) + ':saturation=' + config.saturation +
-    '[bgblur]';
+  var bgFilters = [
+    'scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase',
+    'crop=' + config.targetWidth + ':' + config.targetHeight,
+  ];
+
+  // VFlip kalau style support
+  if (config.vflip) {
+    bgFilters.push('vflip');
+  }
+
+  bgFilters.push('gblur=sigma=' + config.blurStrength);
+  bgFilters.push('eq=brightness=' + (config.brightness - 1).toFixed(2) + ':saturation=' + config.saturation);
+
+  const bgChain = '[bg]' + bgFilters.join(',') + '[bgblur]';
 
   const fgChain = '[fg]' +
     'scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease' +
@@ -93,7 +106,7 @@ async function main() {
   ].join(';');
 
   console.log('');
-  console.log('Filter (aesthetic mirror):');
+  console.log('🔧 Filter:');
   console.log(filter);
   console.log('');
 
@@ -125,13 +138,14 @@ async function main() {
   }
 
   const stats = fs.statSync(outputFile);
-  console.log('Output: ' + outputFile);
-  console.log('Size: ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB');
+  console.log('📁 Output: ' + outputFile);
+  console.log('📊 Size: ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB');
 
   fs.writeFileSync('output/info.txt', outputFile);
+  fs.writeFileSync('output/style.txt', styleName);
 
   console.log('='.repeat(60));
-  console.log('CONVERT COMPLETE - AESTHETIC MODE');
+  console.log('CONVERT COMPLETE - ' + style.icon + ' ' + style.name);
   console.log('='.repeat(60));
 }
 

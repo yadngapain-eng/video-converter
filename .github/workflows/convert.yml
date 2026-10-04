@@ -4,34 +4,30 @@ on:
   workflow_dispatch:
     inputs:
       gdrive_link:
-        description: 'Google Drive link'
+        description: '📥 Google Drive Link (paste full link)'
         required: true
         type: string
       release_tag:
-        description: 'Release tag (contoh: v1)'
+        description: '🏷️ Release Tag (contoh: v1, v2, v3)'
         required: true
         default: 'v1'
         type: string
-      blur_strength:
-        description: 'Blur strength (5-80, low = lebih aesthetic)'
-        required: false
-        default: '15'
-        type: string
-      brightness:
-        description: 'Brightness (0.2-1.0, high = terang)'
-        required: false
-        default: '0.7'
-        type: string
-      saturation:
-        description: 'Saturation (0.0-2.0, high = warna vivid)'
-        required: false
-        default: '0.85'
-        type: string
-      video_scale:
-        description: 'Video scale (0.5-0.95)'
-        required: false
-        default: '0.75'
-        type: string
+      style:
+        description: '🎨 Pilih Style (semua parameter auto-set)'
+        required: true
+        default: 'clean-modern'
+        type: choice
+        options:
+          - 'clean-modern'
+          - 'soft-dreamy'
+          - 'cinematic-dark'
+          - 'vibrant-vivid'
+          - 'subtle-aesthetic'
+          - 'neon-glow'
+          - 'vintage-film'
+          - 'pure-mirror'
+          - 'dark-elegant'
+          - 'bright-pop'
 
 permissions:
   contents: write
@@ -58,7 +54,6 @@ jobs:
 
       # ============================================
       # CACHE STATIC FFMPEG
-      # Pakai static binary (single file, no deps)
       # ============================================
       - name: Cache static FFmpeg
         id: cache-ffmpeg
@@ -92,13 +87,9 @@ jobs:
           echo '✅ FFmpeg cache HIT - skip download!'
           ~/.local/bin/ffmpeg -version | head -1
 
-      # ============================================
-      # ADD FFMPEG TO PATH
-      # ============================================
       - name: Add FFmpeg to PATH
         run: |
           echo '$HOME/.local/bin' >> $GITHUB_PATH
-          which ffmpeg || true
           ffmpeg -version | head -1
 
       # ============================================
@@ -111,19 +102,24 @@ jobs:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
 
-      # ============================================
-      # NPM INSTALL (HANYA KALAU CACHE MISS)
-      # ============================================
       - name: Install Node dependencies
         if: steps.cache-node.outputs.cache-hit != 'true'
-        run: |
-          echo '⚡ Node modules cache MISS - installing...'
-          npm install --no-audit --no-fund --no-package-lock
+        run: npm install --no-audit --no-fund --no-package-lock
 
       - name: Verify Node modules
         if: steps.cache-node.outputs.cache-hit == 'true'
+        run: echo '✅ Node modules cache HIT!'
+
+      # ============================================
+      # SHOW STYLE INFO
+      # ============================================
+      - name: Show selected style
         run: |
-          echo '✅ Node modules cache HIT - skip install!'
+          echo '════════════════════════════════════════'
+          echo '🎨 STYLE DIPILIH: ${{ inputs.style }}'
+          echo '════════════════════════════════════════'
+          node -e "const s = require('./scripts/styles.js'); s.listStyles();"
+          echo '════════════════════════════════════════'
 
       # ============================================
       # DOWNLOAD VIDEO
@@ -134,14 +130,11 @@ jobs:
         run: node scripts/download.js
 
       # ============================================
-      # CONVERT VIDEO
+      # CONVERT VIDEO (PAKAI STYLE)
       # ============================================
       - name: Convert video to 9:16
         env:
-          BLUR_STRENGTH: ${{ inputs.blur_strength }}
-          BRIGHTNESS: ${{ inputs.brightness }}
-          SATURATION: ${{ inputs.saturation }}
-          VIDEO_SCALE: ${{ inputs.video_scale }}
+          STYLE: ${{ inputs.style }}
         run: node scripts/convert.js
 
       # ============================================
@@ -151,11 +144,13 @@ jobs:
         id: output-info
         run: |
           OUTPUT_FILE=$(cat output/info.txt)
+          STYLE_FILE=$(cat output/style.txt)
           FILENAME=$(basename "$OUTPUT_FILE")
           SIZE=$(stat -c %s "$OUTPUT_FILE")
           SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
           echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$SIZE_MB" >> $GITHUB_OUTPUT
+          echo "style=$STYLE_FILE" >> $GITHUB_OUTPUT
 
       # ============================================
       # CREATE RELEASE
@@ -164,14 +159,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ inputs.release_tag }}
-          name: "Video Converted - ${{ inputs.release_tag }}"
+          name: "Video 9:16 - ${{ inputs.release_tag }}"
           body: |
-            ## Video Converted to 9:16
+            ## 🎬 Video Converted to 9:16
 
-            Source: ${{ inputs.gdrive_link }}
-            Blur: ${{ inputs.blur_strength }}
-            Video Scale: ${{ inputs.video_scale }}
-            File Size: ${{ steps.output-info.outputs.file_size }} MB
+            **Style:** ${{ inputs.style }}
+            **Source:** ${{ inputs.gdrive_link }}
+            **File Size:** ${{ steps.output-info.outputs.file_size }} MB
 
             ### Download
             Klik file di bawah untuk download video.
@@ -186,8 +180,9 @@ jobs:
       # ============================================
       - name: Summary
         run: |
-          echo "## Conversion Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎬 Conversion Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Style:** ${{ inputs.style }}" >> $GITHUB_STEP_SUMMARY
           echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
           echo "**FFmpeg cache:** ${{ steps.cache-ffmpeg.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY

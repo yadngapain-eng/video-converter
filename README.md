@@ -1,81 +1,42 @@
 # 🎬 Video Converter 9:16
 
-Convert video dari **Google Drive link** jadi format **YouTube Shorts** (9:16), hasil otomatis ke **GitHub Release**.
+Convert video dari Google Drive jadi YouTube Shorts (9:16) dengan style aesthetic.
 
-## ✨ Fitur
+## 🎨 Style Preset
 
-- ✅ Input: **Link Google Drive** (public)
-- ✅ Convert ke **9:16** (1080x1920)
-- ✅ Video utama di **tengah**, background blur
-- ✅ Output ke **GitHub Release** — download kapan saja
-- ✅ **3-layer caching** — run 2-5x lebih cepat
-- ✅ 100% jalan di **GitHub Actions** (gratis)
+Pilih 1 style, semua parameter di-set otomatis:
+
+| Style | Ikon | Deskripsi | Blur | Brightness |
+|-------|:----:|-----------|:----:|:----------:|
+| `clean-modern` | ✨ | Terang, tajam, modern | 15 | 0.7 |
+| `soft-dreamy` | 🌸 | Lembut, dreamy, glow | 30 | 0.75 |
+| `cinematic-dark` | 🎬 | Gelap, elegan, cinematic | 25 | 0.4 |
+| `vibrant-vivid` | 🌈 | Warna cerah, vivid | 10 | 0.85 |
+| `subtle-aesthetic` | 🎨 | Aesthetic, subtle, kalem | 12 | 0.65 |
+| `neon-glow` | ⚡ | Warna neon, gaming | 20 | 0.6 |
+| `vintage-film` | 📽️ | Vintage, film, retro | 22 | 0.55 |
+| `pure-mirror` | 🪞 | Mirror tajam | 8 | 0.7 |
+| `dark-elegant` | 🖤 | Dark, premium | 18 | 0.45 |
+| `bright-pop` | ☀️ | Sangat terang, ceria | 12 | 0.9 |
 
 ## 🚀 Cara Pakai
 
-### 1. Siapkan link Google Drive
-
-Upload video ke Google Drive → klik kanan → **Share** → **Anyone with link** → copy link.
-
-Format link yang didukung:
-```
-https://drive.google.com/file/d/ABC123/view?usp=sharing
-https://drive.google.com/open?id=ABC123
-https://drive.google.com/uc?id=ABC123
-```
-
-### 2. Trigger GitHub Actions
-
-1. Buka tab **Actions** di GitHub
-2. Pilih workflow **Convert Video to 9:16**
+1. Upload video ke Google Drive → Share public → copy link
+2. Buka tab **Actions** → workflow **Convert Video to 9:16**
 3. Klik **Run workflow**
 4. Isi form:
    - **Google Drive Link**: paste link
-   - **Release Tag**: `v1` (harus unik)
-   - **Blur Strength**: 30
+   - **Release Tag**: `v1`
+   - **Style**: pilih dari dropdown (10 pilihan)
 5. Klik **Run workflow**
+6. Tunggu ~1 menit
+7. Cek **Releases** → download video
 
-### 3. Tunggu hasilnya
+## ⚡ Caching
 
-- **Run pertama**: ~2-3 menit (install FFmpeg)
-- **Run berikutnya**: ~1-2 menit (cache hit ⚡)
-- Buka tab **Releases** → download video
-
-## ⚡ Caching (BARU!)
-
-Repo ini sudah pakai **3-layer caching** untuk speed:
-
-| Layer | Speedup |
-|-------|:-------:|
-| FFmpeg binary | ~30 detik |
-| Node modules | ~20 detik |
-| GitHub cache | auto |
-
-**Hemat ~50 detik per run!**
-
-Detail: lihat [CACHING.md](CACHING.md)
-
-## 🎨 Setting
-
-Di workflow form:
-- **Blur Strength**: 5-80 (default 30)
-- **Brightness**: 0.2-1.0 (default 0.5)
-- **Margin Top**: 0-0.3 (default 0.12)
-- **Margin Bottom**: 0-0.3 (default 0.12)
-
-## 📊 Format Output
-
-```
-+-------------+
-|             |  <- Blur background
-|  +-------+  |
-|  | VIDEO |  |  <- Video utama (tengah)
-|  | UTAMA |  |
-|  +-------+  |
-|             |
-|  1080x1920  |
-+-------------+
-```
+- ✅ FFmpeg static binary di-cache
+- ✅ Node modules di-cache
+- Run berikutnya ~40 detik
 
 ## 📝 License
 
