@@ -6,6 +6,8 @@
     "download": "node scripts/download.js",
     "convert": "node scripts/convert.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "fs-extra": "^11.2.0"
+  },
   "private": true
 }
