@@ -97,21 +97,6 @@ jobs:
       - name: Add FFmpeg to PATH
         run: echo '$HOME/.local/bin' >> $GITHUB_PATH
 
-      - name: Cache Node modules
-        id: cache-node
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
-
-      - name: Install Node dependencies
-        if: steps.cache-node.outputs.cache-hit != 'true'
-        run: npm install --no-audit --no-fund --no-package-lock
-
-      - name: Verify Node modules
-        if: steps.cache-node.outputs.cache-hit == 'true'
-        run: echo '✅ Node modules cache HIT!'
-
       - name: Show platform & style
         run: |
           echo '════════════════════════════════════════'
@@ -197,10 +182,9 @@ jobs:
             echo ""
             echo "| Item | Value |"
             echo "|------|-------|"
-            echo "| Platform | `${{ inputs.platform }}` |"
-            echo "| Style | `${{ inputs.style }}` |"
-            echo "| File | `${{ steps.output-info.outputs.file_name }}` |"
+            echo "| Platform | **${{ inputs.platform }}** |"
+            echo "| Style | **${{ inputs.style }}** |"
+            echo "| File | **${{ steps.output-info.outputs.file_name }}** |"
             echo "| Size | ${{ steps.output-info.outputs.file_size }} MB |"
             echo "| Cache FFmpeg | ${{ steps.cache-ffmpeg.outputs.cache-hit }} |"
-            echo "| Cache Node | ${{ steps.cache-node.outputs.cache-hit }} |"
           } >> $GITHUB_STEP_SUMMARY
