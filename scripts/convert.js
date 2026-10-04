@@ -1,6 +1,10 @@
 /* ============================================
-   CONVERT VIDEO TO 9:16 - CENTER MODE
-   Filter: koma HANYA di antara filter, bukan di akhir
+   CONVERT VIDEO TO 9:16
+   AESTHETIC MIRROR BACKGROUND
+   - Video di tengah (auto-center)
+   - Background = mirror video (flip vertical)
+   - Blur ringan (aesthetic, bukan blur tebal)
+   - Brightness terang (bukan gelap)
    ============================================ */
 
 const fs = require('fs');
@@ -15,12 +19,13 @@ function ensureDir(dir) {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('CONVERT TO 9:16 - CENTER MODE');
+  console.log('CONVERT TO 9:16 - AESTHETIC MODE');
   console.log('='.repeat(60));
 
   const config = {
-    blurStrength: parseFloat(process.env.BLUR_STRENGTH || '30'),
-    brightness: parseFloat(process.env.BRIGHTNESS || '0.5'),
+    blurStrength: parseFloat(process.env.BLUR_STRENGTH || '15'),
+    brightness: parseFloat(process.env.BRIGHTNESS || '0.7'),
+    saturation: parseFloat(process.env.SATURATION || '0.85'),
     videoScale: parseFloat(process.env.VIDEO_SCALE || '0.75'),
     targetWidth: 1080,
     targetHeight: 1920,
@@ -28,9 +33,10 @@ async function main() {
 
   console.log('Config:');
   console.log('  Target: ' + config.targetWidth + 'x' + config.targetHeight);
-  console.log('  Blur: ' + config.blurStrength);
-  console.log('  Brightness: ' + config.brightness);
-  console.log('  Video Scale: ' + (config.videoScale * 100) + '% dari tinggi canvas');
+  console.log('  Blur: ' + config.blurStrength + ' (ringan)');
+  console.log('  Brightness: ' + config.brightness + ' (terang)');
+  console.log('  Saturation: ' + config.saturation);
+  console.log('  Video Scale: ' + (config.videoScale * 100) + '%');
 
   const files = fs.readdirSync('input');
   const videoFiles = files.filter(f => /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(f));
@@ -52,20 +58,25 @@ async function main() {
   console.log('Video area height: ' + videoAreaHeight + 'px');
 
   // ============================================
-  // FILTER — Koma HANYA di ANTARA filter
+  // FILTER AESTHETIC
   // ============================================
   //
-  // Chain bg (sequential):
-  //   [bg] → scale → crop → blur → eq → [bgblur]
-  //   Ditulis: [bg]scale=...,crop=...,gblur=...,eq=...[bgblur]
+  // Cara kerja:
+  // 1. Split video jadi 2 (bg + fg)
+  // 2. Background: scale COVER + blur RINGAN + flip vertical (mirror)
+  // 3. Foreground: scale FIT (video asli)
+  // 4. Overlay fg di tengah, bg di belakang
   //
-  // Perhatikan: KOMA di ANTARA filter, TIDAK di akhir
+  // Filter FFmpeg rules:
+  // • Koma (,) = chain filter (sequential)
+  // • Semicolon (;) = split chain (parallel)
   //
   const bgChain = '[bg]' +
     'scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase' +
     ',crop=' + config.targetWidth + ':' + config.targetHeight +
-    ',gblur=sigma=' + config.blurStrength +
-    ',eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7' +
+    ',vflip' +                                              // mirror vertical (opsional)
+    ',gblur=sigma=' + config.blurStrength +                 // blur RINGAN
+    ',eq=brightness=' + (config.brightness - 1).toFixed(2) + ':saturation=' + config.saturation +
     '[bgblur]';
 
   const fgChain = '[fg]' +
@@ -75,17 +86,15 @@ async function main() {
   const overlay = '[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[out]';
 
   const filter = [
-    '[0:v]split=2[bg][fg]',   // split pakai SEMICOLON
-    bgChain,                  // chain bg: koma di antara filter
-    fgChain,                  // 1 filter, no comma
-    overlay,                  // overlay 2 input
+    '[0:v]split=2[bg][fg]',
+    bgChain,
+    fgChain,
+    overlay,
   ].join(';');
 
   console.log('');
-  console.log('Filter (auto-center):');
+  console.log('Filter (aesthetic mirror):');
   console.log(filter);
-  console.log('');
-  console.log('overlay=(W-w)/2:(H-h)/2  ← video di tengah SEMPURNA');
   console.log('');
 
   const cmd = [
@@ -122,7 +131,7 @@ async function main() {
   fs.writeFileSync('output/info.txt', outputFile);
 
   console.log('='.repeat(60));
-  console.log('CONVERT COMPLETE - VIDEO DI TENGAH');
+  console.log('CONVERT COMPLETE - AESTHETIC MODE');
   console.log('='.repeat(60));
 }
 
