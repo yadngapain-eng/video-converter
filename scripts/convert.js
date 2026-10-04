@@ -1,6 +1,6 @@
 /* ============================================
    CONVERT VIDEO TO 9:16
-   Menggunakan NATIVE fs (tidak butuh fs-extra)
+   Filter: video di tengah + background blur
    ============================================ */
 
 const fs = require('fs');
@@ -50,20 +50,35 @@ async function main() {
   const outputFile = path.join('output', baseName + '_shorts.mp4');
 
   const marginTopPx = Math.floor(config.targetHeight * config.marginTop);
-  const videoAreaHeight = config.targetHeight - marginTopPx * 2;
+  const marginBottomPx = Math.floor(config.targetHeight * config.marginBottom);
+  const videoAreaHeight = config.targetHeight - marginTopPx - marginBottomPx;
 
   console.log('Video area: ' + config.targetWidth + 'x' + videoAreaHeight);
   console.log('Margin top: ' + marginTopPx + 'px');
+  console.log('Margin bottom: ' + marginBottomPx + 'px');
 
+  // ============================================
+  // FILTER — Gunakan KOMA (,) untuk chain
+  // bukan SEMICOLON (;)
+  // ============================================
   const filter = [
+    // Split jadi 2 stream: background + foreground
     '[0:v]split=2[bg][fg]',
-    '[bg]scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase',
-    'crop=' + config.targetWidth + ':' + config.targetHeight,
-    'gblur=sigma=' + config.blurStrength,
-    'eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7[bgblur]',
+
+    // Background: scale cover + crop + blur + darken
+    '[bg]scale=' + config.targetWidth + ':' + config.targetHeight + ':force_original_aspect_ratio=increase,crop=' + config.targetWidth + ':' + config.targetHeight + ',gblur=sigma=' + config.blurStrength + ',eq=brightness=-' + (1 - config.brightness).toFixed(2) + ':saturation=0.7[bgblur]',
+
+    // Foreground: scale fit ke video area
     '[fg]scale=' + config.targetWidth + ':' + videoAreaHeight + ':force_original_aspect_ratio=decrease[fgscaled]',
+
+    // Overlay foreground di atas background (tengah horizontal, margin top vertikal)
     '[bgblur][fgscaled]overlay=(W-w)/2:' + marginTopPx + '[out]',
   ].join(';');
+
+  console.log('');
+  console.log('Filter:');
+  console.log(filter);
+  console.log('');
 
   const cmd = [
     'ffmpeg',
@@ -81,6 +96,8 @@ async function main() {
     '-y', '"' + outputFile + '"',
   ].join(' ');
 
+  console.log('Command:');
+  console.log(cmd);
   console.log('');
   console.log('Processing video...');
 
@@ -97,7 +114,6 @@ async function main() {
   console.log('Output: ' + outputFile);
   console.log('Size: ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB');
 
-  // Simpan info untuk workflow
   fs.writeFileSync('output/info.txt', outputFile);
 
   console.log('='.repeat(60));
