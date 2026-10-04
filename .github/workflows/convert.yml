@@ -1,0 +1,108 @@
+name: Convert Video to 9:16
+
+on:
+  workflow_dispatch:
+    inputs:
+      gdrive_link:
+        description: 'Google Drive link (paste full link)'
+        required: true
+        type: string
+      release_tag:
+        description: 'Release tag (contoh: v1)'
+        required: true
+        default: 'v1'
+        type: string
+      blur_strength:
+        description: 'Blur strength (5-80)'
+        required: false
+        default: '30'
+        type: string
+      brightness:
+        description: 'Brightness (0.2-1.0)'
+        required: false
+        default: '0.5'
+        type: string
+      margin_top:
+        description: 'Margin top (0-0.3)'
+        required: false
+        default: '0.12'
+        type: string
+      margin_bottom:
+        description: 'Margin bottom (0-0.3)'
+        required: false
+        default: '0.12'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    name: Convert Video
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Download video from Google Drive
+        env:
+          GDRIVE_LINK: ${{ inputs.gdrive_link }}
+        run: node scripts/download.js
+
+      - name: Convert video to 9:16
+        env:
+          BLUR_STRENGTH: ${{ inputs.blur_strength }}
+          BRIGHTNESS: ${{ inputs.brightness }}
+          MARGIN_TOP: ${{ inputs.margin_top }}
+          MARGIN_BOTTOM: ${{ inputs.margin_bottom }}
+        run: node scripts/convert.js
+
+      - name: Get output info
+        id: output-info
+        run: |
+          OUTPUT_FILE=$(cat output/info.txt)
+          FILENAME=$(basename "$OUTPUT_FILE")
+          SIZE=$(stat -c %s "$OUTPUT_FILE")
+          SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
+          echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
+          echo "file_size=$SIZE_MB" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: "Video Converted - ${{ inputs.release_tag }}"
+          body: |
+            ## Video Converted to 9:16
+
+            Source: ${{ inputs.gdrive_link }}
+            Blur: ${{ inputs.blur_strength }}
+            Brightness: ${{ inputs.brightness }}
+            Margin: Top ${{ inputs.margin_top }} / Bottom ${{ inputs.margin_bottom }}
+            File Size: ${{ steps.output-info.outputs.file_size }} MB
+
+            ### Download
+            Klik file di bawah untuk download video hasil konversi.
+          files: output/*.mp4
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Conversion Complete" >> $GITHUB_STEP_SUMMARY
+          echo "**File:** ${{ steps.output-info.outputs.file_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Size:** ${{ steps.output-info.outputs.file_size }} MB" >> $GITHUB_STEP_SUMMARY
