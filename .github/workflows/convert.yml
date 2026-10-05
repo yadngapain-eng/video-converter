@@ -1,10 +1,10 @@
-name: Convert Video to 9:16
+name: Convert Video to 9:16 (Universal)
 
 on:
   workflow_dispatch:
     inputs:
-      gdrive_link:
-        description: '📥 Google Drive Link'
+      video_url:
+        description: '🔗 Video URL (YouTube/FB/IG/TikTok/GDrive/dll)'
         required: true
         type: string
       release_tag:
@@ -107,9 +107,14 @@ jobs:
           echo ''
           node -e "require('./scripts/styles.js').listStyles();"
 
-      - name: Download video from Google Drive
+      - name: Install yt-dlp (universal downloader)
+        run: |
+          python3 -m pip install --upgrade --quiet yt-dlp
+          yt-dlp --version
+
+      - name: Download video (auto-detect source)
         env:
-          GDRIVE_LINK: ${{ inputs.gdrive_link }}
+          VIDEO_URL: ${{ inputs.video_url }}
         run: node scripts/download.js
 
       - name: Convert video (single-pass + style)
@@ -163,7 +168,7 @@ jobs:
             |-------|-------|
             | **Platform** | `${{ inputs.platform }}` |
             | **Style** | `${{ inputs.style }}` |
-            | **Source** | ${{ inputs.gdrive_link }} |
+            | **Source** | ${{ inputs.video_url }} |
             | **File Size** | ${{ steps.output-info.outputs.file_size }} MB |
 
             ### 📥 Download
