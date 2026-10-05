@@ -14,6 +14,26 @@ Convert video dari Google Drive jadi **YouTube Shorts / Reels / TikTok (9:16)** 
 - 💾 **3-layer Caching** — FFmpeg + Node modules
 - 🔒 **Concurrency Lock** — anti-tabrakan tag sama
 
+## 🌐 Sumber Video yang Didukung
+
+Auto-detect URL — tinggal paste link, script tahu harus pakai downloader mana:
+
+| Situs | Contoh |
+|-------|--------|
+| 🟢 Google Drive | `https://drive.google.com/file/d/.../view` |
+| ▶️ YouTube (video & Shorts) | `https://youtube.com/watch?v=...` |
+| ▶️ YouTube Shorts | `https://youtube.com/shorts/...` |
+| 📘 Facebook | `https://facebook.com/.../videos/...` |
+| 📘 Facebook Watch | `https://fb.watch/...` |
+| 📸 Instagram Reels/Post | `https://instagram.com/reel/...` |
+| 🎵 TikTok | `https://tiktok.com/@user/video/...` |
+| 🐦 Twitter / X | `https://x.com/user/status/...` |
+| 🎬 Vimeo | `https://vimeo.com/...` |
+| 📺 Dailymotion | `https://dailymotion.com/video/...` |
+| 👽 Reddit | `https://reddit.com/r/.../comments/...` |
+| 🟣 Twitch VOD | `https://twitch.tv/videos/...` |
+| ➕ 1000+ lainnya | Didukung oleh `yt-dlp` |
+
 ## 🎨 Style Preset (10 pilihan)
 
 | Style | Ikon | Deskripsi | Blur | Brightness |
