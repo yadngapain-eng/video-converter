@@ -107,10 +107,31 @@ jobs:
           echo ''
           node -e "require('./scripts/styles.js').listStyles();"
 
-      - name: Install yt-dlp (universal downloader)
+      - name: Cache yt-dlp binary
+        id: cache-ytdlp
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/yt-dlp
+          key: yt-dlp-${{ runner.os }}-2026-10
+
+      - name: Download yt-dlp binary
+        if: steps.cache-ytdlp.outputs.cache-hit != 'true'
         run: |
-          python3 -m pip install --upgrade --quiet yt-dlp
-          yt-dlp --version
+          echo '⚡ yt-dlp cache MISS - downloading...'
+          mkdir -p ~/.local/bin
+          curl -L --fail -o ~/.local/bin/yt-dlp \
+            https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          chmod +x ~/.local/bin/yt-dlp
+          echo '✅ yt-dlp downloaded'
+
+      - name: Use cached yt-dlp
+        if: steps.cache-ytdlp.outputs.cache-hit == 'true'
+        run: |
+          echo '✅ yt-dlp cache HIT!'
+          ~/.local/bin/yt-dlp --version
+
+      - name: Add yt-dlp to PATH
+        run: echo '$HOME/.local/bin' >> $GITHUB_PATH
 
       - name: Download video (auto-detect source)
         env:
